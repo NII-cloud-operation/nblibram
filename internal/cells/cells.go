@@ -13,6 +13,7 @@ func Run(args []string) error {
 	fs := flag.NewFlagSet("cells", flag.ExitOnError)
 	file := fs.String("file", "", "path to .ipynb (defaults to stdin)")
 	sets := fs.Int("sets", 1, "number of Markdown+code pairs")
+	count := fs.Int("count", 0, "number of consecutive cells (overrides --sets)")
 	format := fs.String("format", "md", "output format: md, json, or py")
 	excludeOutputs := fs.Bool("exclude-outputs", false, "exclude cell outputs from JSON output")
 	var queryFlags nb.MultiFlag
@@ -22,9 +23,6 @@ func Run(args []string) error {
 	}
 	if len(queryFlags) == 0 {
 		return errors.New("cells requires at least one --query")
-	}
-	if *sets <= 0 {
-		return errors.New("--sets must be >= 1")
 	}
 
 	notebook, err := nb.Read(*file)
@@ -42,12 +40,33 @@ func Run(args []string) error {
 		return err
 	}
 
-	sections, err := CollectCellSets(notebook, startIdx, *sets)
+	var sections []render.SectionBlock
+	if *count > 0 {
+		sections, err = collectConsecutive(notebook, startIdx, *count)
+	} else {
+		if *sets <= 0 {
+			return errors.New("--sets must be >= 1")
+		}
+		sections, err = CollectCellSets(notebook, startIdx, *sets)
+	}
 	if err != nil {
 		return err
 	}
 
 	return render.Sections(*format, sections, render.Options{ExcludeOutputs: *excludeOutputs})
+}
+
+func collectConsecutive(notebook *nb.Notebook, startIdx, count int) ([]render.SectionBlock, error) {
+	if startIdx < 0 || startIdx >= len(notebook.Cells) {
+		return nil, fmt.Errorf("start index %d out of range", startIdx)
+	}
+	end := startIdx + count
+	if end > len(notebook.Cells) {
+		end = len(notebook.Cells)
+	}
+	return []render.SectionBlock{
+		{Cells: nb.CloneCells(notebook.Cells[startIdx:end])},
+	}, nil
 }
 
 func CollectCellSets(notebook *nb.Notebook, startIdx, count int) ([]render.SectionBlock, error) {
