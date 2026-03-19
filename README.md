@@ -75,7 +75,25 @@ nblibram filter --gitleaks .gitleaks.toml < notebook.ipynb > sanitized.ipynb
 nblibram pkl --file output.pkl --format text
 ```
 
-## Build
+## Getting started
+
+Download the latest binary from [Releases](https://github.com/NII-cloud-operation/nblibram/releases) and place it in your `$PATH`:
+
+```bash
+# macOS (Apple Silicon)
+curl -sL https://github.com/NII-cloud-operation/nblibram/releases/latest/download/nblibram_darwin_arm64.tar.gz | tar xz
+mv nblibram /usr/local/bin/
+
+# macOS (Intel)
+curl -sL https://github.com/NII-cloud-operation/nblibram/releases/latest/download/nblibram_darwin_amd64.tar.gz | tar xz
+mv nblibram /usr/local/bin/
+
+# Linux (amd64)
+curl -sL https://github.com/NII-cloud-operation/nblibram/releases/latest/download/nblibram_linux_amd64.tar.gz | tar xz
+sudo mv nblibram /usr/local/bin/
+```
+
+## Build from source
 
 ```bash
 go build ./cmd/nblibram/
