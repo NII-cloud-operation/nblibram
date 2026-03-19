@@ -1,0 +1,27 @@
+version: 2
+
+project_name: nblibram
+
+builds:
+  - main: ./cmd/nblibram
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats:
+      - tar.gz
+    name_template: '{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}'
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+
+changelog:
+  sort: asc
