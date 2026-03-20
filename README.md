@@ -5,6 +5,12 @@ Treats notebooks as structured documents so agents and humans can slice, mutate,
 Secret detection is powered by [gitleaks](https://github.com/gitleaks/gitleaks) (222+ built-in rules for API keys, tokens, credentials, etc.).
 Ships as a single Go binary with no runtime dependencies.
 
+## Philosophy
+
+Notebooks are computational narratives—code cells don't stand alone, they're explained by the Markdown cells around them.
+nblibram's query operations slice Markdown/code cell pairs together so the surrounding story always travels with the code.
+`section` slices by heading hierarchy, `cells` slices by cell order, both preserving the narrative context that makes code understandable.
+
 ## Commands (stdin → stdout)
 
 All commands read `.ipynb` JSON from stdin (or `--file`) and write to stdout.
