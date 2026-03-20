@@ -65,6 +65,9 @@ func main() {
 	}
 
 	if err != nil {
+		if err == audit.ErrLeaksFound {
+			os.Exit(1)
+		}
 		fmt.Fprintf(os.Stderr, "nblibram: %v\n", err)
 		os.Exit(1)
 	}
