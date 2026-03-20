@@ -4,11 +4,6 @@ on:
   push:
   pull_request:
 
-permissions:
-  contents: read
-  pull-requests: write
-  actions: write
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -25,4 +20,8 @@ jobs:
       - name: Show coverage summary
         run: go tool cover -func=coverage.out
 
-      - uses: k1LoW/octocov-action@v1
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage.out
