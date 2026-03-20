@@ -94,7 +94,9 @@ func Run(args []string) error {
 	}
 
 	if len(findings) > 0 {
-		os.Exit(1)
+		return ErrLeaksFound
 	}
 	return nil
 }
+
+var ErrLeaksFound = fmt.Errorf("leaks detected")

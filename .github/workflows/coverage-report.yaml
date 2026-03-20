@@ -1,0 +1,52 @@
+name: Coverage Report
+
+on:
+  workflow_run:
+    workflows: ["Test"]
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  report:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Get PR number
+        id: pr
+        if: ${{ github.event.workflow_run.event == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pulls = await github.rest.pulls.list({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              head: `${context.payload.workflow_run.head_repository.owner.login}:${context.payload.workflow_run.head_branch}`,
+              state: 'open'
+            });
+            if (pulls.data.length > 0) {
+              return pulls.data[0].number;
+            }
+            return '';
+          result-encoding: string
+
+      - uses: k1LoW/octocov-action@v1
+        env:
+          GITHUB_PULL_REQUEST_NUMBER: ${{ steps.pr.outputs.result || '' }}
+          OCTOCOV_GITHUB_REF: refs/heads/${{ github.event.workflow_run.head_branch }}
+          OCTOCOV_GITHUB_REF_NAME: ${{ github.event.workflow_run.head_branch }}
+          OCTOCOV_GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}

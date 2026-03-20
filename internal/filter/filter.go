@@ -68,17 +68,36 @@ func (s *Sanitizer) SanitizeCells(cells []nb.Cell) {
 		for j, line := range cells[i].Source {
 			cells[i].Source[j] = s.Sanitize(line)
 		}
+		s.sanitizeMap(cells[i].Metadata)
 		for k := range cells[i].Outputs {
 			out := &cells[i].Outputs[k]
 			for j, line := range out.Text {
 				out.Text[j] = s.Sanitize(line)
 			}
+			s.sanitizeMap(out.Data)
 			if out.Evalue != "" {
 				out.Evalue = s.Sanitize(out.Evalue)
 			}
 			for j, line := range out.Traceback {
 				out.Traceback[j] = s.Sanitize(line)
 			}
+		}
+	}
+}
+
+func (s *Sanitizer) sanitizeMap(m map[string]any) {
+	for k, v := range m {
+		switch val := v.(type) {
+		case string:
+			m[k] = s.Sanitize(val)
+		case []interface{}:
+			for i, item := range val {
+				if str, ok := item.(string); ok {
+					val[i] = s.Sanitize(str)
+				}
+			}
+		case map[string]interface{}:
+			s.sanitizeMap(val)
 		}
 	}
 }
@@ -110,19 +129,16 @@ func LoadDefault(noFilter bool) *Sanitizer {
 }
 
 func NewDetector(configPath string) (*detect.Detector, error) {
-	if configPath == "" {
-		return detect.NewDetectorDefaultConfig()
-	}
-
-	// Read default config first
 	viper.SetConfigType("toml")
 	if err := viper.ReadConfig(strings.NewReader(config.DefaultConfig)); err != nil {
 		return nil, err
 	}
-	// Merge custom config on top
-	viper.SetConfigFile(configPath)
-	if err := viper.MergeInConfig(); err != nil {
-		return nil, fmt.Errorf("reading %s: %w", configPath, err)
+
+	if configPath != "" {
+		viper.SetConfigFile(configPath)
+		if err := viper.MergeInConfig(); err != nil {
+			return nil, fmt.Errorf("reading %s: %w", configPath, err)
+		}
 	}
 
 	var vc config.ViperConfig
@@ -133,5 +149,8 @@ func NewDetector(configPath string) (*detect.Detector, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	addBuiltinRules(&cfg)
+
 	return detect.NewDetector(cfg), nil
 }
