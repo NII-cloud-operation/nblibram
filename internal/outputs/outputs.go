@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/nii-cloud/nblibram/internal/filter"
 	nb "github.com/nii-cloud/nblibram/internal/notebook"
 )
 
@@ -21,6 +22,7 @@ func Run(args []string) error {
 	file := fs.String("file", "", "path to .ipynb (defaults to stdin)")
 	format := fs.String("format", "text", "output format: text, json, or raw")
 	mime := fs.String("mime", "", "specific MIME type to extract")
+	noFilter := fs.Bool("no-filter", false, "disable privacy filters")
 	var queryFlags nb.MultiFlag
 	fs.Var(&queryFlags, "query", "cell query ("+nb.QueryUsage+")")
 	if err := fs.Parse(args); err != nil {
@@ -35,12 +37,12 @@ func Run(args []string) error {
 		return err
 	}
 
-	filter, err := nb.ParseQueryFlags(queryFlags)
+	qf, err := nb.ParseQueryFlags(queryFlags)
 	if err != nil {
 		return err
 	}
 
-	startIdx, err := nb.LocateStartCell(notebook, filter)
+	startIdx, err := nb.LocateStartCell(notebook, qf)
 	if err != nil {
 		return err
 	}
@@ -50,7 +52,12 @@ func Run(args []string) error {
 		return err
 	}
 
-	return emitOutputs(notebook.Cells[startIdx], outFmt)
+	cell := notebook.Cells[startIdx]
+	if sanitizer := filter.LoadDefault(*noFilter); sanitizer != nil {
+		sanitizer.SanitizeCells([]nb.Cell{cell})
+	}
+
+	return emitOutputs(cell, outFmt)
 }
 
 func parseOutputFormat(format, mime string) (outputFormat, error) {

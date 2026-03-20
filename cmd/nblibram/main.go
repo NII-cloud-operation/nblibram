@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/nii-cloud/nblibram/internal/audit"
 	"github.com/nii-cloud/nblibram/internal/cells"
 	"github.com/nii-cloud/nblibram/internal/filter"
 	"github.com/nii-cloud/nblibram/internal/mutate"
@@ -45,8 +46,8 @@ func main() {
 	// filter
 	case "filter":
 		err = filter.Run(args)
-	case "init-config":
-		err = filter.InitConfig()
+	case "audit":
+		err = audit.Run(args)
 	// pkl
 	case "pkl":
 		err = pkl.Run(args)
@@ -84,8 +85,8 @@ mutate:
   delete    delete a cell
 
 filter:
-  filter      sanitize sensitive information
-  init-config create default filter config
+  filter      sanitize sensitive information (gitleaks-powered)
+  audit       check for leaked secrets (exit 1 if found)
 
 pkl:
   pkl         read pickled kernel output logs

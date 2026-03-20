@@ -2,11 +2,13 @@
 
 The notebook Swiss Army knife—query, edit, and sanitize Jupyter files from the shell.
 Treats notebooks as structured documents so agents and humans can slice, mutate, and clean them without a GUI.
+Secret detection is powered by [gitleaks](https://github.com/gitleaks/gitleaks) (222+ built-in rules for API keys, tokens, credentials, etc.).
 Ships as a single Go binary with no runtime dependencies.
 
 ## Commands (stdin → stdout)
 
 All commands read `.ipynb` JSON from stdin (or `--file`) and write to stdout.
+Query commands apply gitleaks-based privacy filters by default (`--no-filter` to disable).
 
 ### Query
 
@@ -24,12 +26,12 @@ All commands read `.ipynb` JSON from stdin (or `--file`) and write to stdout.
 Mutation commands write the modified notebook JSON to stdout. Use `-i` for in-place file update.
 `--hash` enforces optimistic locking—obtain it via `nblibram hash`.
 
-### Filter
+### Filter & Audit
 
-- `nblibram filter` – sanitize sensitive information (`--config`, `--gitleaks`, `-i`).
-- `nblibram init-config` – create default `~/.nbfilterrc.toml`.
+- `nblibram filter` – sanitize sensitive information in a notebook (`-i` for in-place).
+- `nblibram audit` – check for leaked secrets without modifying the notebook. Exits 1 if leaks are found (`--format text|json`).
 
-Supports [gitleaks](https://github.com/gitleaks/gitleaks) rule files via `--gitleaks` for extended secret detection.
+Both use gitleaks' built-in rules by default. Set `NBLIBRAM_GITLEAKS_CONFIG` to a `.gitleaks.toml` path to add custom rules (e.g. IP addresses, domain names, internal URLs).
 
 ### Utility
 
@@ -68,8 +70,11 @@ nblibram insert --query start:0 --source 'x = 1' < notebook.ipynb | nblibram fil
 HASH=$(nblibram hash --query start:3 < notebook.ipynb | jq -r '.[0]._hash')
 nblibram delete --query start:3 --hash "$HASH" -i notebook.ipynb
 
-# Sanitize with gitleaks rules
-nblibram filter --gitleaks .gitleaks.toml < notebook.ipynb > sanitized.ipynb
+# Audit for secrets (CI-friendly, exits 1 on findings)
+nblibram audit < notebook.ipynb
+
+# Audit with JSON output
+nblibram audit --format json < notebook.ipynb
 
 # Read a pickled kernel log
 nblibram pkl --file output.pkl --format text
@@ -101,16 +106,39 @@ go build ./cmd/nblibram/
 
 ## Configuration
 
-Filter patterns live in `~/.nbfilterrc.toml`:
+nblibram uses [gitleaks](https://github.com/gitleaks/gitleaks) for secret detection. By default, gitleaks' 222+ built-in rules are active.
 
-```toml
-[[filters]]
-pattern = '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b'
-label = "[IPv4_#]"
+To add custom rules (e.g. IP addresses, internal URLs), create a `.gitleaks.toml` and point to it:
 
-[[filters]]
-pattern = '[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*\.(com|org|net|jp|io|dev|local|internal)'
-label = "[DOMAIN_#]"
+```bash
+export NBLIBRAM_GITLEAKS_CONFIG=/path/to/.gitleaks.toml
 ```
 
-`#` in the label is replaced with a sequential number per unique match, preserving equivalence (e.g. the same IP always maps to `[IPv4_1]`).
+Example `.gitleaks.toml`:
+
+```toml
+[extend]
+useDefault = true
+
+[[rules]]
+id = "ipv4-address"
+description = "Detects IPv4 addresses"
+regex = '''\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b'''
+[rules.allowlist]
+regexes = [
+    '''192\.168\.\d{1,3}\.\d{1,3}''',
+    '''127\.0\.0\.1''',
+    '''0\.0\.0\.0''',
+]
+
+[[rules]]
+id = "email-address"
+description = "Detects email addresses"
+regex = '''[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'''
+[rules.allowlist]
+regexes = [
+    '''.*@example\.com''',
+]
+```
+
+Detected secrets are replaced with `[rule-id_N]` labels, preserving equivalence (e.g. the same secret always maps to `[generic-api-key_1]`).

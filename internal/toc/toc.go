@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/nii-cloud/nblibram/internal/filter"
 	nb "github.com/nii-cloud/nblibram/internal/notebook"
 	"github.com/nii-cloud/nblibram/internal/render"
 )
@@ -16,6 +17,7 @@ func Run(args []string) error {
 	words := fs.Int("words", 20, "number of preview words")
 	format := fs.String("format", "md", "output format: md or json")
 	noOutputs := fs.Bool("exclude-outputs", false, "exclude cell outputs from JSON output")
+	noFilter := fs.Bool("no-filter", false, "disable privacy filters")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -25,6 +27,8 @@ func Run(args []string) error {
 		return err
 	}
 
+	sanitizer := filter.LoadDefault(*noFilter)
+
 	headings := nb.CollectHeadings(notebook, *words)
 	if len(headings) == 0 {
 		return nil
@@ -32,9 +36,15 @@ func Run(args []string) error {
 
 	switch *format {
 	case "md":
+		if sanitizer != nil {
+			sanitizer.SanitizeHeadings(headings)
+		}
 		render.PrintHeadingsMarkdown(headings)
 	case "json":
 		headingCells := nb.ExtractHeadingCells(notebook)
+		if sanitizer != nil {
+			sanitizer.SanitizeCells(headingCells)
+		}
 		if *noOutputs {
 			headingCells = nb.ExcludeOutputs(headingCells)
 		}

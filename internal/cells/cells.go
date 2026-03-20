@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 
+	"github.com/nii-cloud/nblibram/internal/filter"
 	nb "github.com/nii-cloud/nblibram/internal/notebook"
 	"github.com/nii-cloud/nblibram/internal/render"
 )
@@ -16,6 +17,7 @@ func Run(args []string) error {
 	count := fs.Int("count", 0, "number of consecutive cells (overrides --sets)")
 	format := fs.String("format", "md", "output format: md, json, or py")
 	excludeOutputs := fs.Bool("exclude-outputs", false, "exclude cell outputs from JSON output")
+	noFilter := fs.Bool("no-filter", false, "disable privacy filters")
 	var queryFlags nb.MultiFlag
 	fs.Var(&queryFlags, "query", "cell query ("+nb.QueryUsage+")")
 	if err := fs.Parse(args); err != nil {
@@ -30,12 +32,12 @@ func Run(args []string) error {
 		return err
 	}
 
-	filter, err := nb.ParseQueryFlags(queryFlags)
+	f, err := nb.ParseQueryFlags(queryFlags)
 	if err != nil {
 		return err
 	}
 
-	startIdx, err := nb.LocateStartCell(notebook, filter)
+	startIdx, err := nb.LocateStartCell(notebook, f)
 	if err != nil {
 		return err
 	}
@@ -51,6 +53,12 @@ func Run(args []string) error {
 	}
 	if err != nil {
 		return err
+	}
+
+	if sanitizer := filter.LoadDefault(*noFilter); sanitizer != nil {
+		for i := range sections {
+			sanitizer.SanitizeCells(sections[i].Cells)
+		}
 	}
 
 	return render.Sections(*format, sections, render.Options{ExcludeOutputs: *excludeOutputs})
