@@ -42,6 +42,9 @@ func Run(args []string) error {
 		render.PrintHeadingsMarkdown(headings)
 	case "json":
 		headingCells := nb.ExtractHeadingCells(notebook)
+		for i := range headingCells {
+			headingCells[i].Hash = nb.ComputeCellHash(headingCells[i].CellType, nb.CellText(headingCells[i]))
+		}
 		if sanitizer != nil {
 			sanitizer.SanitizeCells(headingCells)
 		}

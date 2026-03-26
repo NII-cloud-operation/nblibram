@@ -2,6 +2,7 @@ package toc
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -61,10 +62,24 @@ func TestTocJSON(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if !strings.Contains(out, `"cells"`) {
-		t.Error("expected JSON with 'cells' key")
+	var result struct {
+		Cells []struct {
+			ID   string `json:"id"`
+			Hash string `json:"_hash"`
+		} `json:"cells"`
 	}
-	if !strings.Contains(out, `"title"`) {
-		t.Error("expected cell id 'title' in JSON")
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(result.Cells) == 0 {
+		t.Fatal("expected heading cells in JSON")
+	}
+	for _, c := range result.Cells {
+		if c.Hash == "" {
+			t.Errorf("cell %s: _hash is empty", c.ID)
+		}
+	}
+	if result.Cells[0].ID != "title" {
+		t.Errorf("first heading cell id: expected 'title', got %s", result.Cells[0].ID)
 	}
 }

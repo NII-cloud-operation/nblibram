@@ -23,6 +23,9 @@ func Sections(format string, sections []SectionBlock, opts Options) error {
 		PrintSectionsMarkdown(sections)
 	case "json":
 		cells := FlattenSectionCells(sections)
+		for i := range cells {
+			cells[i].Hash = nb.ComputeCellHash(cells[i].CellType, nb.CellText(cells[i]))
+		}
 		if opts.ExcludeOutputs {
 			cells = nb.ExcludeOutputs(cells)
 		}
