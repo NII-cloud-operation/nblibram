@@ -24,6 +24,7 @@ type Cell struct {
 	Metadata       map[string]any `json:"metadata,omitempty"`
 	ExecutionCount *int           `json:"execution_count,omitempty"`
 	Index          int            `json:"_index,omitempty"`
+	Hash           string         `json:"_hash,omitempty"`
 }
 
 type Output struct {

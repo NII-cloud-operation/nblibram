@@ -9,6 +9,7 @@ import (
 func (nb *Notebook) Write(path string, inPlace bool) error {
 	for i := range nb.Cells {
 		nb.Cells[i].Index = 0
+		nb.Cells[i].Hash = ""
 	}
 
 	enc := json.NewEncoder(os.Stdout)

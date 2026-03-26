@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -64,14 +65,31 @@ func TestSectionsPython(t *testing.T) {
 	}
 }
 
-func TestSectionsJSON(t *testing.T) {
+func TestSectionsJSONIncludesHash(t *testing.T) {
 	out := captureStdout(t, func() {
 		if err := Sections("json", testSections(), Options{}); err != nil {
 			t.Fatal(err)
 		}
 	})
-	if !strings.Contains(out, `"cells"`) {
-		t.Error("missing cells key")
+	var result struct {
+		Cells []struct {
+			CellType string `json:"cell_type"`
+			Hash     string `json:"_hash"`
+		} `json:"cells"`
+	}
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+	if len(result.Cells) != 2 {
+		t.Fatalf("expected 2 cells, got %d", len(result.Cells))
+	}
+	mdHash := nb.ComputeCellHash("markdown", "## Heading\n")
+	if result.Cells[0].Hash != mdHash {
+		t.Errorf("cell 0: expected hash %s, got %s", mdHash, result.Cells[0].Hash)
+	}
+	codeHash := nb.ComputeCellHash("code", "x = 1\n")
+	if result.Cells[1].Hash != codeHash {
+		t.Errorf("cell 1: expected hash %s, got %s", codeHash, result.Cells[1].Hash)
 	}
 }
 
