@@ -3,6 +3,7 @@ package filter
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/spf13/viper"
@@ -42,13 +43,30 @@ func (s *Sanitizer) Sanitize(text string) string {
 		return text
 	}
 
-	result := text
+	// Collect unique secrets, sorted by length descending so that
+	// longer matches are replaced first (e.g. "192.168.0.100" before
+	// "192.168.0.1") to prevent partial-match corruption.
+	type secretInfo struct {
+		secret string
+		ruleID string
+	}
+	seen := map[string]bool{}
+	var secrets []secretInfo
 	for _, f := range findings {
-		if f.Secret == "" {
+		if f.Secret == "" || seen[f.Secret] {
 			continue
 		}
-		label := s.labelFor(f.Secret, f.RuleID)
-		result = strings.ReplaceAll(result, f.Secret, label)
+		seen[f.Secret] = true
+		secrets = append(secrets, secretInfo{f.Secret, f.RuleID})
+	}
+	sort.Slice(secrets, func(i, j int) bool {
+		return len(secrets[i].secret) > len(secrets[j].secret)
+	})
+
+	result := text
+	for _, si := range secrets {
+		label := s.labelFor(si.secret, si.ruleID)
+		result = strings.ReplaceAll(result, si.secret, label)
 	}
 	return result
 }

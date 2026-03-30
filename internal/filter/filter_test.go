@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -80,6 +81,36 @@ func TestSanitizeIPv4Equivalence(t *testing.T) {
 	}
 	if l1 != l3 {
 		t.Errorf("same IP should get same label: %s vs %s", l1, l3)
+	}
+}
+
+func TestSanitizeIPv4PrefixOverlap(t *testing.T) {
+	s := newTestSanitizer(t)
+	input := `hosts = ["192.168.0.1", "192.168.0.100", "192.168.0.1"]`
+	result := s.Sanitize(input)
+
+	// Both IPs must be sanitized
+	if strings.Contains(result, "192.168.0.1") {
+		t.Fatalf("SECURITY: IP address was not sanitized: %s", result)
+	}
+
+	// "192.168.0.100" must not become "[ipv4-address_N]00"
+	if strings.Contains(result, "]00") {
+		t.Fatalf("partial-match corruption: %s", result)
+	}
+
+	// Different IPs must get different labels
+	labels := extractAllLabels(result)
+	if len(labels) < 3 {
+		t.Fatalf("expected at least 3 labels, got %d in %s", len(labels), result)
+	}
+	// labels[0] and labels[2] should match (same IP: 192.168.0.1)
+	if labels[0] != labels[2] {
+		t.Errorf("same IP got different labels: %s vs %s", labels[0], labels[2])
+	}
+	// labels[0] and labels[1] should differ (different IPs)
+	if labels[0] == labels[1] {
+		t.Errorf("different IPs got same label: %s", labels[0])
 	}
 }
 
@@ -438,4 +469,9 @@ func extractLabel(s string) string {
 		return ""
 	}
 	return s[start : end+1]
+}
+
+func extractAllLabels(s string) []string {
+	re := regexp.MustCompile(`\[[a-zA-Z0-9_-]+_\d+\]`)
+	return re.FindAllString(s, -1)
 }
