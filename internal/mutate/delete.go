@@ -13,6 +13,7 @@ func RunDelete(args []string) error {
 	file := fs.String("file", "", "path to .ipynb (defaults to stdin)")
 	hash := fs.String("hash", "", "expected cell hash (required, optimistic lock)")
 	inPlace := fs.Bool("i", false, "modify file in place")
+	noMeme := fs.Bool("no-meme", false, "skip MEME prev/next updates")
 	var queryFlags nb.MultiFlag
 	fs.Var(&queryFlags, "query", "cell to delete ("+nb.QueryUsage+")")
 	if err := fs.Parse(args); err != nil {
@@ -49,6 +50,13 @@ func RunDelete(args []string) error {
 
 	notebook.Cells = append(notebook.Cells[:idx], notebook.Cells[idx+1:]...)
 	notebook.CellsRaw = append(notebook.CellsRaw[:idx], notebook.CellsRaw[idx+1:]...)
+
+	if !*noMeme {
+		neighbors := neighborsOfDeleted(idx, len(notebook.Cells))
+		if err := nb.UpdateNeighborMemes(notebook, neighbors); err != nil {
+			return err
+		}
+	}
 
 	return notebook.Write(*file, *inPlace)
 }

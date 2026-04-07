@@ -16,6 +16,7 @@ func RunInsert(args []string) error {
 	sourceFile := fs.String("source-file", "", "read cell source from file")
 	position := fs.String("position", "after", "insert position: before or after")
 	inPlace := fs.Bool("i", false, "modify file in place")
+	noMeme := fs.Bool("no-meme", false, "skip MEME assignment and prev/next updates")
 	var queryFlags nb.MultiFlag
 	fs.Var(&queryFlags, "query", "insertion point ("+nb.QueryUsage+")")
 	if err := fs.Parse(args); err != nil {
@@ -40,12 +41,17 @@ func RunInsert(args []string) error {
 	}
 
 	newCell := nb.NewCell(*cellType, cellSource)
+	if !*noMeme {
+		newCell.Metadata["lc_cell_meme"] = map[string]any{"current": nb.GenerateMEME()}
+	}
 	newCellRaw, err := nb.MarshalNewCellRaw(newCell)
 	if err != nil {
 		return err
 	}
 
+	var insertIdx int
 	if len(queryFlags) == 0 {
+		insertIdx = len(notebook.Cells)
 		notebook.Cells = append(notebook.Cells, newCell)
 		notebook.CellsRaw = append(notebook.CellsRaw, newCellRaw)
 	} else {
@@ -57,11 +63,10 @@ func RunInsert(args []string) error {
 		if err != nil {
 			return err
 		}
-		insertIdx := idx
+		insertIdx = idx
 		if *position == "after" {
 			insertIdx = idx + 1
 		}
-		// insertIdx can be len(Cells) when inserting after the last cell
 		cells := make([]nb.Cell, 0, len(notebook.Cells)+1)
 		cells = append(cells, notebook.Cells[:insertIdx]...)
 		cells = append(cells, newCell)
@@ -73,6 +78,13 @@ func RunInsert(args []string) error {
 		raws = append(raws, newCellRaw)
 		raws = append(raws, notebook.CellsRaw[insertIdx:]...)
 		notebook.CellsRaw = raws
+	}
+
+	if !*noMeme {
+		neighbors := neighborsOf(insertIdx, len(notebook.Cells))
+		if err := nb.UpdateNeighborMemes(notebook, neighbors); err != nil {
+			return err
+		}
 	}
 
 	return notebook.Write(*file, *inPlace)
