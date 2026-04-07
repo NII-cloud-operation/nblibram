@@ -68,13 +68,13 @@ func TestLocateStartCell(t *testing.T) {
 func TestLocateStartCellMeme(t *testing.T) {
 	nb := loadTestNotebook(t)
 
-	meme := "aaaa-bbbb-cccc"
+	meme := "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"
 	idx, err := LocateStartCell(nb, QueryFilter{Meme: &meme})
 	if err != nil || idx != 2 {
 		t.Errorf("meme exact => idx=%d, err=%v", idx, err)
 	}
 
-	memeWild := "aaaa-bbbb-cccc*"
+	memeWild := "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11*"
 	idx, err = LocateStartCell(nb, QueryFilter{Meme: &memeWild})
 	if err != nil || idx != 2 {
 		t.Errorf("meme wildcard => idx=%d, err=%v", idx, err)

@@ -54,7 +54,14 @@ func RunUpdate(args []string) error {
 		return fmt.Errorf("hash mismatch: cell has been modified (expected %s, got %s)", *hash, currentHash)
 	}
 
-	cell.Source = nb.NBSource(nb.SplitSourceLines(cellSource))
+	newSource := nb.NBSource(nb.SplitSourceLines(cellSource))
+	cell.Source = newSource
+
+	patched, err := nb.PatchCellSource(notebook.CellsRaw[idx], newSource)
+	if err != nil {
+		return err
+	}
+	notebook.CellsRaw[idx] = patched
 
 	return notebook.Write(*file, *inPlace)
 }

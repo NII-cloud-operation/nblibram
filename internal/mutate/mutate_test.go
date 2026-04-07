@@ -144,3 +144,93 @@ func TestHashAll(t *testing.T) {
 		t.Errorf("expected 6 hashes, got %d", len(results))
 	}
 }
+
+func TestInsertAssignsMeme(t *testing.T) {
+	out := captureStdout(t, func() {
+		if err := RunInsert([]string{"-file", testFile, "-source", "x = 1", "-type", "code"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	var result nb.Notebook
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatal(err)
+	}
+	last := result.Cells[len(result.Cells)-1]
+	if nb.GetMemeID(last) == "" {
+		t.Error("inserted cell should have a MEME")
+	}
+}
+
+func TestInsertNoMeme(t *testing.T) {
+	out := captureStdout(t, func() {
+		if err := RunInsert([]string{"-file", testFile, "-source", "x = 1", "-type", "code", "-no-meme"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	var result nb.Notebook
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatal(err)
+	}
+	last := result.Cells[len(result.Cells)-1]
+	if nb.GetMemeID(last) != "" {
+		t.Error("inserted cell should have no MEME with --no-meme")
+	}
+}
+
+func TestInsertUpdatesPrevNext(t *testing.T) {
+	// Insert between cell 2 (has MEME) and cell 3
+	out := captureStdout(t, func() {
+		if err := RunInsert([]string{"-file", testFile, "-query", "start:2", "-position", "after", "-source", "inserted", "-type", "markdown"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	var result nb.Notebook
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatal(err)
+	}
+
+	// New cell at index 3 should have prev=cell2's MEME
+	newMeme := nb.GetCellMeme(result.Cells[3])
+	if newMeme == nil {
+		t.Fatal("new cell has no MEME")
+	}
+	if newMeme["previous"] != "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11" {
+		t.Errorf("new cell previous: %v", newMeme["previous"])
+	}
+
+	// Cell 2's next should point to new cell
+	meme2 := nb.GetCellMeme(result.Cells[2])
+	if meme2["next"] != nb.GetMemeID(result.Cells[3]) {
+		t.Errorf("cell 2 next: %v, want %v", meme2["next"], nb.GetMemeID(result.Cells[3]))
+	}
+}
+
+func TestDeleteUpdatesPrevNext(t *testing.T) {
+	notebook, err := nb.Read(testFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Delete cell 3 (between cell 2 with MEME and cell 4 with MEME)
+	cell := notebook.Cells[3]
+	hash := nb.ComputeCellHash(cell.CellType, nb.CellText(cell))
+
+	out := captureStdout(t, func() {
+		if err := RunDelete([]string{"-file", testFile, "-query", "start:3", "-hash", hash}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	var result nb.Notebook
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		t.Fatal(err)
+	}
+
+	// After delete, cell 2 (idx 2) and cell 4 (now idx 3) are neighbors
+	meme2 := nb.GetCellMeme(result.Cells[2])
+	meme3 := nb.GetCellMeme(result.Cells[3])
+	if meme2["next"] != nb.GetMemeID(result.Cells[3]) {
+		t.Errorf("cell 2 next: %v, want %v", meme2["next"], nb.GetMemeID(result.Cells[3]))
+	}
+	if meme3["previous"] != nb.GetMemeID(result.Cells[2]) {
+		t.Errorf("cell 3 previous: %v, want %v", meme3["previous"], nb.GetMemeID(result.Cells[2]))
+	}
+}

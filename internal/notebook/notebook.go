@@ -10,10 +10,15 @@ import (
 )
 
 type Notebook struct {
-	Cells    []Cell         `json:"cells"`
-	Metadata map[string]any `json:"metadata,omitempty"`
-	NBFormat int            `json:"nbformat,omitempty"`
-	Minor    int            `json:"nbformat_minor,omitempty"`
+	// Parsed fields (read-only view for querying)
+	Cells    []Cell
+	Metadata map[string]any
+	NBFormat int
+	Minor    int
+
+	// Raw JSON preservation (for writing)
+	rawTop   []orderedField
+	CellsRaw []json.RawMessage
 }
 
 type Cell struct {
@@ -90,14 +95,57 @@ func Read(path string) (*Notebook, error) {
 		return nil, errors.New("no notebook data")
 	}
 
+	topFields, err := parseOrderedObject(data)
+	if err != nil {
+		return nil, fmt.Errorf("parsing notebook: %w", err)
+	}
+
 	var nb Notebook
-	if err := json.Unmarshal(data, &nb); err != nil {
-		return nil, err
+	nb.rawTop = topFields
+
+	for _, f := range topFields {
+		switch f.Key {
+		case "cells":
+			nb.CellsRaw, err = parseRawArray(f.Value)
+			if err != nil {
+				return nil, fmt.Errorf("parsing cells array: %w", err)
+			}
+			nb.Cells = make([]Cell, len(nb.CellsRaw))
+			for i, raw := range nb.CellsRaw {
+				if err := json.Unmarshal(raw, &nb.Cells[i]); err != nil {
+					return nil, fmt.Errorf("parsing cell %d: %w", i, err)
+				}
+				nb.Cells[i].Index = i
+			}
+		case "metadata":
+			if err := json.Unmarshal(f.Value, &nb.Metadata); err != nil {
+				return nil, fmt.Errorf("parsing metadata: %w", err)
+			}
+		case "nbformat":
+			if err := json.Unmarshal(f.Value, &nb.NBFormat); err != nil {
+				return nil, fmt.Errorf("parsing nbformat: %w", err)
+			}
+		case "nbformat_minor":
+			if err := json.Unmarshal(f.Value, &nb.Minor); err != nil {
+				return nil, fmt.Errorf("parsing nbformat_minor: %w", err)
+			}
+		}
 	}
-	for i := range nb.Cells {
-		nb.Cells[i].Index = i
-	}
+
 	return &nb, nil
+}
+
+type RawField struct {
+	Key   string
+	Value json.RawMessage
+}
+
+func (nb *Notebook) RawTopFields() []RawField {
+	out := make([]RawField, len(nb.rawTop))
+	for i, f := range nb.rawTop {
+		out[i] = RawField{Key: f.Key, Value: f.Value}
+	}
+	return out
 }
 
 func CollectHeadings(nb *Notebook, previewWords int) []Heading {

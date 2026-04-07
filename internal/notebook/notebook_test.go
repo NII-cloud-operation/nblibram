@@ -1,6 +1,8 @@
 package notebook
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
 )
 
@@ -170,4 +172,124 @@ func TestPreviewFromLines(t *testing.T) {
 	if p != "" {
 		t.Error("expected empty preview for nil lines")
 	}
+}
+
+func TestReadEmptyData(t *testing.T) {
+	// Create a temporary empty file
+	f, err := os.CreateTemp("", "empty*.ipynb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.Close()
+	defer os.Remove(f.Name())
+
+	_, err = Read(f.Name())
+	if err == nil {
+		t.Error("expected error for empty file")
+	}
+}
+
+func TestReadInvalidJSON(t *testing.T) {
+	f := writeTempFile(t, `not json at all`)
+	_, err := Read(f)
+	if err == nil {
+		t.Error("expected error for invalid JSON")
+	}
+}
+
+func TestReadBrokenCellsArray(t *testing.T) {
+	f := writeTempFile(t, `{"cells": "not-an-array", "nbformat": 4}`)
+	_, err := Read(f)
+	if err == nil {
+		t.Error("expected error for non-array cells")
+	}
+}
+
+func TestReadBrokenCell(t *testing.T) {
+	f := writeTempFile(t, `{"cells": [{"cell_type": 123}], "nbformat": 4}`)
+	_, err := Read(f)
+	if err == nil {
+		t.Error("expected error for malformed cell")
+	}
+}
+
+func TestReadBrokenMetadata(t *testing.T) {
+	f := writeTempFile(t, `{"cells": [], "metadata": "bad", "nbformat": 4}`)
+	_, err := Read(f)
+	if err == nil {
+		t.Error("expected error for malformed metadata")
+	}
+}
+
+func TestReadBrokenNbformat(t *testing.T) {
+	f := writeTempFile(t, `{"cells": [], "metadata": {}, "nbformat": "bad"}`)
+	_, err := Read(f)
+	if err == nil {
+		t.Error("expected error for malformed nbformat")
+	}
+}
+
+func TestReadBrokenNbformatMinor(t *testing.T) {
+	f := writeTempFile(t, `{"cells": [], "metadata": {}, "nbformat": 4, "nbformat_minor": "bad"}`)
+	_, err := Read(f)
+	if err == nil {
+		t.Error("expected error for malformed nbformat_minor")
+	}
+}
+
+func TestUnmarshalJSONStringSource(t *testing.T) {
+	var s NBSource
+	if err := json.Unmarshal([]byte(`"single line"`), &s); err != nil {
+		t.Fatal(err)
+	}
+	if len(s) != 1 || s[0] != "single line" {
+		t.Errorf("unexpected: %v", s)
+	}
+}
+
+func TestUnmarshalJSONEmptySource(t *testing.T) {
+	var s NBSource
+	if err := s.UnmarshalJSON(nil); err != nil {
+		t.Fatal(err)
+	}
+	if s != nil {
+		t.Errorf("expected nil, got %v", s)
+	}
+}
+
+func TestUnmarshalJSONBadSource(t *testing.T) {
+	var s NBSource
+	err := json.Unmarshal([]byte(`123`), &s)
+	if err == nil {
+		t.Error("expected error for numeric source")
+	}
+}
+
+func TestRawTopFields(t *testing.T) {
+	nb := loadTestNotebook(t)
+	fields := nb.RawTopFields()
+	if len(fields) == 0 {
+		t.Fatal("expected non-empty RawTopFields")
+	}
+	keys := make(map[string]bool)
+	for _, f := range fields {
+		keys[f.Key] = true
+	}
+	for _, required := range []string{"cells", "metadata", "nbformat", "nbformat_minor"} {
+		if !keys[required] {
+			t.Errorf("missing key %q", required)
+		}
+	}
+}
+
+func writeTempFile(t *testing.T, content string) string {
+	t.Helper()
+	f, err := os.CreateTemp("", "nb*.ipynb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.WriteString(content)
+	f.Close()
+	t.Cleanup(func() { os.Remove(f.Name()) })
+	return f.Name()
 }
