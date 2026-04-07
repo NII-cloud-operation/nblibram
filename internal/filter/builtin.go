@@ -12,6 +12,14 @@ var builtinRules = []config.Rule{
 		RuleID:      "ipv4-address",
 		Description: "Detects IPv4 addresses",
 		Regex:       regexp.MustCompile(`\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b`),
+		Allowlists: []*config.Allowlist{
+			{
+				Regexes: []*regexp.Regexp{
+					regexp.MustCompile(`^127\.`),
+					regexp.MustCompile(`^0\.0\.0\.0$`),
+				},
+			},
+		},
 	},
 	{
 		RuleID:      "domain-name",

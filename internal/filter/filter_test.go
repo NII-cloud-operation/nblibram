@@ -66,6 +66,24 @@ func TestSanitizeIPv4(t *testing.T) {
 	}
 }
 
+func TestSanitizeIPv4Loopback(t *testing.T) {
+	s := newTestSanitizer(t)
+	input := `server = "127.0.0.1"`
+	result := s.Sanitize(input)
+	if !strings.Contains(result, "127.0.0.1") {
+		t.Errorf("loopback should not be sanitized, got %q", result)
+	}
+}
+
+func TestSanitizeIPv4BindAll(t *testing.T) {
+	s := newTestSanitizer(t)
+	input := `bind = "0.0.0.0"`
+	result := s.Sanitize(input)
+	if !strings.Contains(result, "0.0.0.0") {
+		t.Errorf("0.0.0.0 should not be sanitized, got %q", result)
+	}
+}
+
 func TestSanitizeIPv4Equivalence(t *testing.T) {
 	s := newTestSanitizer(t)
 	r1 := s.Sanitize(`a = "10.0.0.5"`)
