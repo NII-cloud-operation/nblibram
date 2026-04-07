@@ -48,6 +48,7 @@ func RunDelete(args []string) error {
 	}
 
 	notebook.Cells = append(notebook.Cells[:idx], notebook.Cells[idx+1:]...)
+	notebook.CellsRaw = append(notebook.CellsRaw[:idx], notebook.CellsRaw[idx+1:]...)
 
 	return notebook.Write(*file, *inPlace)
 }

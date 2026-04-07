@@ -1,6 +1,7 @@
 package mutate
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 
@@ -39,9 +40,14 @@ func RunInsert(args []string) error {
 	}
 
 	newCell := nb.NewCell(*cellType, cellSource)
+	newCellRaw, err := nb.MarshalNewCellRaw(newCell)
+	if err != nil {
+		return err
+	}
 
 	if len(queryFlags) == 0 {
 		notebook.Cells = append(notebook.Cells, newCell)
+		notebook.CellsRaw = append(notebook.CellsRaw, newCellRaw)
 	} else {
 		filter, err := nb.ParseQueryFlags(queryFlags)
 		if err != nil {
@@ -61,6 +67,12 @@ func RunInsert(args []string) error {
 		cells = append(cells, newCell)
 		cells = append(cells, notebook.Cells[insertIdx:]...)
 		notebook.Cells = cells
+
+		raws := make([]json.RawMessage, 0, len(notebook.CellsRaw)+1)
+		raws = append(raws, notebook.CellsRaw[:insertIdx]...)
+		raws = append(raws, newCellRaw)
+		raws = append(raws, notebook.CellsRaw[insertIdx:]...)
+		notebook.CellsRaw = raws
 	}
 
 	return notebook.Write(*file, *inPlace)

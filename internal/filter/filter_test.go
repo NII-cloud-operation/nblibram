@@ -345,79 +345,66 @@ func TestFilterRunWithSanitization(t *testing.T) {
 func TestSanitizeRawNotebook(t *testing.T) {
 	s := newTestSanitizer(t)
 	secret := `token = "ghp_R2D2c3POxWfYz9AqBmNjKlHgTsUvXw0123"`
-	raw := map[string]interface{}{
-		"metadata": map[string]interface{}{"info": secret},
-		"cells": []interface{}{
-			map[string]interface{}{
-				"cell_type": "code",
-				"source":    []interface{}{secret},
-				"metadata":  map[string]interface{}{"tag": secret},
-				"outputs": []interface{}{
-					map[string]interface{}{
-						"output_type": "stream",
-						"text":        []interface{}{secret},
-					},
-					map[string]interface{}{
-						"output_type": "error",
-						"evalue":      secret,
-						"traceback":   []interface{}{secret},
-					},
-					map[string]interface{}{
-						"output_type": "execute_result",
-						"data":        map[string]interface{}{"text/plain": secret},
-					},
-				},
-			},
-		},
-	}
-	sanitizeRawNotebook(s, raw)
+	nbJSON := `{"cells":[{"cell_type":"code","source":["` + jsonEscape(secret) + `"],"metadata":{"tag":"` + jsonEscape(secret) + `"},"outputs":[{"output_type":"stream","text":["` + jsonEscape(secret) + `"]},{"output_type":"error","evalue":"` + jsonEscape(secret) + `","traceback":["` + jsonEscape(secret) + `"]},{"output_type":"execute_result","data":{"text/plain":"` + jsonEscape(secret) + `"}}]}],"metadata":{"info":"` + jsonEscape(secret) + `"},"nbformat":4,"nbformat_minor":5}`
 
-	// Check notebook metadata
-	md := raw["metadata"].(map[string]interface{})
-	if strings.Contains(md["info"].(string), "ghp_") {
-		t.Fatal("SECURITY: notebook metadata not sanitized")
+	// Feed through the filter pipeline
+	old := os.Stdin
+	r, w, _ := os.Pipe()
+	w.WriteString(nbJSON)
+	w.Close()
+	os.Stdin = r
+
+	notebook, err := nb.Read("")
+	os.Stdin = old
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	cells := raw["cells"].([]interface{})
-	cell := cells[0].(map[string]interface{})
+	sanitize := s.Sanitize
 
-	// Check source
-	src := cell["source"].([]interface{})
-	if strings.Contains(src[0].(string), "ghp_") {
+	for i, raw := range notebook.CellsRaw {
+		notebook.CellsRaw[i], err = nb.SanitizeCellRaw(raw, sanitize)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	notebook.SanitizeRawTopField("metadata", sanitize)
+
+	// Verify: re-read the sanitized cell
+	var cell nb.Cell
+	if err := json.Unmarshal(notebook.CellsRaw[0], &cell); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(cell.Source[0], "ghp_") {
 		t.Fatal("SECURITY: cell source not sanitized")
 	}
-
-	// Check cell metadata
-	cmeta := cell["metadata"].(map[string]interface{})
-	if strings.Contains(cmeta["tag"].(string), "ghp_") {
+	if str, ok := cell.Metadata["tag"].(string); ok && strings.Contains(str, "ghp_") {
 		t.Fatal("SECURITY: cell metadata not sanitized")
 	}
-
-	// Check outputs
-	outputs := cell["outputs"].([]interface{})
-
-	// stream text
-	stream := outputs[0].(map[string]interface{})
-	stxt := stream["text"].([]interface{})
-	if strings.Contains(stxt[0].(string), "ghp_") {
+	if strings.Contains(cell.Outputs[0].Text[0], "ghp_") {
 		t.Fatal("SECURITY: stream text not sanitized")
 	}
-
-	// error evalue + traceback
-	errOut := outputs[1].(map[string]interface{})
-	if strings.Contains(errOut["evalue"].(string), "ghp_") {
+	if strings.Contains(cell.Outputs[1].Evalue, "ghp_") {
 		t.Fatal("SECURITY: evalue not sanitized")
 	}
-	tb := errOut["traceback"].([]interface{})
-	if strings.Contains(tb[0].(string), "ghp_") {
+	if strings.Contains(cell.Outputs[1].Traceback[0], "ghp_") {
 		t.Fatal("SECURITY: traceback not sanitized")
 	}
-
-	// execute_result data
-	execOut := outputs[2].(map[string]interface{})
-	data := execOut["data"].(map[string]interface{})
-	if strings.Contains(data["text/plain"].(string), "ghp_") {
+	if str, ok := cell.Outputs[2].Data["text/plain"].(string); ok && strings.Contains(str, "ghp_") {
 		t.Fatal("SECURITY: output data not sanitized")
+	}
+
+	// Verify notebook metadata
+	var meta map[string]interface{}
+	for _, f := range notebook.RawTopFields() {
+		if f.Key == "metadata" {
+			json.Unmarshal(f.Value, &meta)
+		}
+	}
+	if meta != nil {
+		if str, ok := meta["info"].(string); ok && strings.Contains(str, "ghp_") {
+			t.Fatal("SECURITY: notebook metadata not sanitized")
+		}
 	}
 }
 
@@ -460,6 +447,12 @@ func TestRunFilterInPlace(t *testing.T) {
 	if strings.Contains(string(result), "ghp_R2D2c3POxWfYz9AqBmNjKlHgTsUvXw0123") {
 		t.Fatal("SECURITY: secret not sanitized in in-place filter")
 	}
+}
+
+func jsonEscape(s string) string {
+	b, _ := json.Marshal(s)
+	// Strip surrounding quotes
+	return string(b[1 : len(b)-1])
 }
 
 func extractLabel(s string) string {
