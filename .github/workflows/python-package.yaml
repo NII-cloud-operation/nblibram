@@ -1,0 +1,103 @@
+name: Python package
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Run Go tests
+        run: go test ./...
+
+      - name: Build release artifacts without publishing
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean ${{ startsWith(github.ref, 'refs/tags/') && '--skip=publish' || '--snapshot' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package GoReleaser binaries as wheels
+        run: |
+          python -m pip install build hatchling twine
+          python hatch_build.py
+          python -m twine check --strict dist/*.whl
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nblibram-wheels
+          path: dist/*.whl
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v7
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: nblibram-release
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*_checksums.txt
+            dist/CHANGELOG.md
+          if-no-files-found: error
+
+  test:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            image: quay.io/pypa/manylinux2014_x86_64
+          - os: ubuntu-24.04-arm
+            image: quay.io/pypa/manylinux2014_aarch64
+          - os: macos-15-intel
+            image: ''
+          - os: macos-14
+            image: ''
+          - os: windows-2022
+            image: ''
+          - os: windows-11-arm
+            image: ''
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - uses: actions/download-artifact@v8
+        with:
+          name: nblibram-wheels
+          path: dist
+
+      - name: Test Linux wheel on manylinux2014
+        if: runner.os == 'Linux'
+        env:
+          MANYLINUX_IMAGE: ${{ matrix.image }}
+        run: |
+          docker run --rm -v "$PWD:/project:ro" -w /project \
+            "$MANYLINUX_IMAGE" \
+            /opt/python/cp313-cp313/bin/python scripts/check_install.py dist
+
+      - name: Test wheel in an isolated environment
+        run: python scripts/check_install.py dist
