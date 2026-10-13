@@ -37,8 +37,8 @@ jobs:
     needs: [python-package, release]
     runs-on: ubuntu-24.04
     environment:
-      name: pypi
-      url: https://pypi.org/p/nblibram
+      name: ${{ github.repository == 'NII-cloud-operation/nblibram' && 'pypi' || 'testpypi' }}
+      url: ${{ github.repository == 'NII-cloud-operation/nblibram' && 'https://pypi.org/project/nblibram/' || 'https://test.pypi.org/project/nblibram/' }}
     permissions:
       id-token: write
     steps:
@@ -47,5 +47,7 @@ jobs:
           name: nblibram-wheels
           path: dist
 
-      - name: Publish to PyPI
+      - name: Publish wheels
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ github.repository == 'NII-cloud-operation/nblibram' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}
