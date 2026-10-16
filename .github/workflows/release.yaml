@@ -6,26 +6,48 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  python-package:
+    uses: ./.github/workflows/python-package.yaml
+
   release:
-    runs-on: ubuntu-latest
+    needs: python-package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v8
         with:
-          fetch-depth: 0
+          name: nblibram-release
+          path: dist
 
-      - uses: actions/setup-go@v5
-        with:
-          go-version: stable
-
-      - name: Run tests
-        run: go test ./...
-
-      - uses: goreleaser/goreleaser-action@v6
-        with:
-          version: latest
-          args: release --clean
+      - name: Publish tested release artifacts
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" \
+            --notes-file dist/CHANGELOG.md \
+            dist/*.tar.gz dist/*.zip dist/*_checksums.txt
+
+  publish-pypi:
+    needs: [python-package, release]
+    runs-on: ubuntu-24.04
+    environment:
+      name: ${{ github.repository == 'NII-cloud-operation/nblibram' && 'pypi' || 'testpypi' }}
+      url: ${{ github.repository == 'NII-cloud-operation/nblibram' && 'https://pypi.org/project/nblibram/' || 'https://test.pypi.org/project/nblibram/' }}
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: nblibram-wheels
+          path: dist
+
+      - name: Publish wheels
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: ${{ github.repository == 'NII-cloud-operation/nblibram' && 'https://upload.pypi.org/legacy/' || 'https://test.pypi.org/legacy/' }}

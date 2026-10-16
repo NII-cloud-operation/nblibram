@@ -88,6 +88,17 @@ nblibram pkl --file output.pkl --format text
 
 ## Getting started
 
+### Install with pip
+
+```bash
+pip install nblibram
+```
+
+Wheels include the executable and install the `nblibram` command in your Python
+environment. Go is not required.
+
+### Standalone binary
+
 Download the latest binary from [Releases](https://github.com/NII-cloud-operation/nblibram/releases) and place it in your `$PATH`:
 
 ```bash

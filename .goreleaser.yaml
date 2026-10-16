@@ -14,6 +14,9 @@ builds:
       - amd64
       - arm64
 
+snapshot:
+  version_template: '{{ .Version }}.dev0'
+
 archives:
   - formats:
       - tar.gz
